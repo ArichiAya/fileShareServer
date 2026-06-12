@@ -19,7 +19,7 @@ type FSserver struct {
 
 type Option func(s *FSserver)
 
-const maxUploadSize = 1 << 30 // 1GiB
+const maxUploadSize = 10_000_000_000 // 10 GB
 
 func NewFSserver(options ...Option) *FSserver {
 	srv := &FSserver{

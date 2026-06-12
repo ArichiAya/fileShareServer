@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { listFiles, downloadFile } from '../api.js'
 
 const props = defineProps({
+  tick: { type: Number, default: 0 },
   path: { type: String, default: '' },
   trash: { type: Boolean, default: false },
 })
@@ -14,7 +15,6 @@ const children = ref([])
 const loading = ref(false)
 
 async function load() {
-  if (children.value.length > 0) return
   loading.value = true
   try {
     children.value = await listFiles(props.path, props.trash)
@@ -22,6 +22,11 @@ async function load() {
     loading.value = false
   }
 }
+
+// 监听 tick，展开的节点在操作后刷新
+watch(() => props.tick, () => {
+  if (expanded.value) load()
+})
 
 async function toggle() {
   expanded.value = !expanded.value
@@ -105,6 +110,7 @@ load()
         <TreeView
           v-for="d in dirs"
           :key="d.name"
+          :tick="tick"
           :path="childPath(d.name)"
           :trash="trash"
           @delete="emit('delete', $event)"

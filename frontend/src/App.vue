@@ -7,7 +7,38 @@ import { uploadFile, deleteItem, restoreItem, cleanItem } from './api.js'
 
 const showTrash = ref(false)
 const error = ref('')
-const refreshKey = ref(0)
+const tick = ref(0)  // 操作后 +1，TreeView watch 来刷新已展开的节点
+
+// 拖拽上传
+const dragOver = ref(false)
+let dragCount = 0
+
+function onDragEnter(e) {
+  e.preventDefault()
+  dragCount++
+  if (!showTrash.value) dragOver.value = true
+}
+function onDragLeave(e) {
+  dragCount--
+  if (dragCount <= 0) {
+    dragCount = 0
+    dragOver.value = false
+  }
+}
+function onDragOver(e) {
+  e.preventDefault()
+}
+async function onDrop(e) {
+  e.preventDefault()
+  dragOver.value = false
+  dragCount = 0
+  if (showTrash.value) return
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+  for (const file of files) {
+    await onUpload(file)
+  }
+}
 
 // 确认对话框
 const dialogVisible = ref(false)
@@ -35,7 +66,7 @@ async function onUpload(file) {
   error.value = ''
   try {
     await uploadFile(file)
-    refreshKey.value++
+    tick.value++
   } catch (e) {
     error.value = '上传失败: ' + e.message
   }
@@ -49,7 +80,7 @@ function onDelete(payload) {
   showDialog(`确认将「${label}」移至回收站？`, async () => {
     try {
       await deleteItem(payload.dir, payload.name)
-      refreshKey.value++
+      tick.value++
     } catch (e) {
       error.value = '删除失败: ' + e.message
     }
@@ -62,7 +93,7 @@ function onRestore(payload) {
   showDialog(`确认恢复「${label}」？`, async () => {
     try {
       await restoreItem(payload.dir, payload.name)
-      refreshKey.value++
+      tick.value++
     } catch (e) {
       error.value = '恢复失败: ' + e.message
     }
@@ -75,7 +106,7 @@ function onClean(payload) {
   showDialog(`确认彻底删除「${label}」？此操作不可撤销！`, async () => {
     try {
       await cleanItem(payload.dir, payload.name)
-      refreshKey.value++
+      tick.value++
     } catch (e) {
       error.value = '彻底删除失败: ' + e.message
     }
@@ -84,14 +115,30 @@ function onClean(payload) {
 
 function toggleTrash() {
   showTrash.value = !showTrash.value
-  refreshKey.value++
+  tick.value++
 }
 
 const title = computed(() => (showTrash.value ? '🗑️ 回收站' : '📁 文件管理'))
 </script>
 
 <template>
-  <div class="app">
+  <div
+    class="app"
+    @dragenter="onDragEnter"
+    @dragleave="onDragLeave"
+    @dragover="onDragOver"
+    @drop="onDrop"
+  >
+    <!-- 拖拽上传蒙层 -->
+    <Transition name="fade">
+      <div v-if="dragOver && !showTrash" class="drop-overlay">
+        <div class="drop-box">
+          <span class="drop-icon">📂</span>
+          <span>释放文件以上传</span>
+        </div>
+      </div>
+    </Transition>
+
     <header class="header">
       <h1>{{ title }}</h1>
       <div class="header-actions">
@@ -106,7 +153,7 @@ const title = computed(() => (showTrash.value ? '🗑️ 回收站' : '📁 文�
 
     <div class="tree-container">
       <TreeView
-        :key="refreshKey"
+        :tick="tick"
         path=""
         :trash="showTrash"
         @delete="onDelete"
@@ -147,5 +194,31 @@ const title = computed(() => (showTrash.value ? '🗑️ 回收站' : '📁 文�
 }
 .tree-container {
   border: 1px solid #eee; border-radius: 8px; padding: 12px 16px;
+}
+
+/* 拖拽上传蒙层 */
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(66, 184, 131, 0.12);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.drop-box {
+  background: #fff;
+  border: 3px dashed #42b883;
+  border-radius: 16px;
+  padding: 48px 64px;
+  text-align: center;
+  font-size: 20px;
+  color: #333;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.drop-icon { font-size: 48px; }
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 </style>
