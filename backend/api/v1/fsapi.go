@@ -1,9 +1,11 @@
 package v1
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -410,6 +412,91 @@ func (s *FSserver) Restore(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"path":    dstPath,
+	})
+}
+
+func (s *FSserver) DownloadDir(w http.ResponseWriter, req *http.Request) {
+	// 示例: GET /downloaddir?dir=2026-06
+	dir := req.URL.Query().Get("dir")
+	if dir == "" {
+		http.Error(w, "缺少 dir 参数", http.StatusBadRequest)
+		return
+	}
+
+	// 构建安全路径
+	dirPath, err := safeJoin(s.uploadDir, dir)
+	if err != nil {
+		http.Error(w, "非法路径", http.StatusForbidden)
+		return
+	}
+
+	// 检查存在且是目录
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "目录不存在", http.StatusNotFound)
+		} else {
+			http.Error(w, "访问失败", http.StatusInternalServerError)
+		}
+		return
+	}
+	if !info.IsDir() {
+		http.Error(w, "不是目录", http.StatusBadRequest)
+		return
+	}
+
+	// 设置响应头，流式生成 zip
+	dirName := filepath.Base(dirPath)
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, dirName))
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == dirPath {
+			return nil // 跳过根目录本身
+		}
+
+		relPath, _ := filepath.Rel(dirPath, path)
+
+		if d.IsDir() {
+			// 在 zip 中创建目录条目
+			_, err := zw.CreateHeader(&zip.FileHeader{
+				Name:     relPath + string(filepath.Separator),
+				Modified: time.Now(),
+			})
+			return err
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		fInfo, err := f.Stat()
+		if err != nil {
+			return err
+		}
+
+		header, err := zip.FileInfoHeader(fInfo)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		header.Method = zip.Deflate
+
+		entryW, err := zw.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(entryW, f)
+		return err
 	})
 }
 

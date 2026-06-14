@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { listFiles, downloadFile } from '../api.js'
+import { listFiles, downloadFile, downloadDir } from '../api.js'
 
 const props = defineProps({
   tick: { type: Number, default: 0 },
@@ -42,6 +42,10 @@ function childPath(name) {
 
 function onDownload(f) {
   downloadFile(props.path, f.name)
+}
+
+function onDownloadDir() {
+  downloadDir(props.path)
 }
 
 function onDelete(f) {
@@ -93,6 +97,7 @@ load()
       <span class="name">{{ path.split('/').pop() }}</span>
       <span class="node-actions" @click.stop>
         <template v-if="!trash">
+          <button class="btn btn-dl" @click="onDownloadDir">下载</button>
           <button class="btn btn-rm" @click="onDeleteDir">删除</button>
         </template>
         <template v-else>

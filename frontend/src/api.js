@@ -25,6 +25,16 @@ export function downloadFile(dir, name) {
   document.body.removeChild(a)
 }
 
+export function downloadDir(dir) {
+  const url = `/downloaddir?dir=${encodeURIComponent(dir)}`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = dir.split('/').pop() + '.zip'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 export async function listFiles(dir, trash = false) {
   let url = `/listfiles?dir=${encodeURIComponent(dir)}`
   if (trash) url += '&trash=1'
