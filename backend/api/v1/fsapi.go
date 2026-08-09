@@ -206,7 +206,8 @@ func (s *FSserver) Download(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// 第五步：设置下载响应头，交给 ServeFile 处理（自动支持 Range、Content-Type）
+	// 第五步：设置下载响应头。先设 Content-Type 防止 ServeFile 把 APK 等格式误判为 zip
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeName))
 	http.ServeFile(w, req, filePath)
 }
